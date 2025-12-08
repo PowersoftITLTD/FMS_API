@@ -13,9 +13,14 @@ namespace FMS_WebAPI.Repository.IRepositoryService
         Task<LoginResponse> VerifyingResponse(string userLogin, string Password);
 
         Task<LoginResponse> ValidateLogin_WHCode(UserWarehouseCode _userWarehouse);
-        Task<ResponseObject> GetWarehouseDetails(WarehouseDetails warehouseModel);
-        Task<ResponseObject> GetLocationDetails(WarehouseDetails warehouseDetails);
-        Task<ResponseObject> WMSBarCode_Registration(DeviceRegistration _devicereg);
+        Task<ResponseObject<List<WarehouseDetails_Model>>> GetWarehouseDetails(WarehouseDetails warehouseModel);
+        Task<ResponseObject<List<LocationDetails_Model>>> GetLocationDetails(WarehouseDetails warehouseDetails);
+        Task<ResponseObject<dynamic>> WMSBarCode_Registration(DeviceRegistration _devicereg);
+        Task<ResponseObject<string>> ChangePassword(ChangePassword_Model changePassword);
+        Task<ResponseObject<List<User_MST_Model>>> GetuserDetails_ByEmailId(string email);
+        Task<IEnumerable<ForgotPasswordOutPut_List>> GetForgotPasswordAsync(string LoginName);
+        Task<IEnumerable<ResetPasswordOutPut_List>> GetResetPasswordAsync(string TEMPPASSWORD, string LoginName);
+
         //Task<string> InsertILogResponse(LogResponseObject logResponseObject);
 
         //string UserDecryptedResponse(string encryptedData, string keyString);

@@ -22,13 +22,15 @@ namespace FMS_WebAPI.Repository.RepositoryService
         private readonly IConfiguration _configuration;
         private readonly SqlConnection _connection;
         private readonly IDapperDbConnection _dbConnection;
+        private readonly ICommonService _commonService;
 
-        public AuthService(IConfiguration configuration, SqlConnection sqlConnection, IDapperDbConnection dbConnection)  //IUserService userService,
+        public AuthService(IConfiguration configuration, SqlConnection sqlConnection, IDapperDbConnection dbConnection ,ICommonService commonService)  //IUserService userService,
         {
             //_userService = userService;
             _configuration = configuration;
             _connection = sqlConnection;
             _dbConnection = dbConnection;
+            _commonService = commonService;
         }
        
         public async Task<LoginResponse> ValidateLogin(User _user)  // string apiKey
@@ -91,51 +93,63 @@ namespace FMS_WebAPI.Repository.RepositoryService
             return response;
         }
 
-        public async Task<ResponseObject>WMSBarCode_Registration(DeviceRegistration _devicereg)
+        public async Task<ResponseObject<dynamic>> WMSBarCode_Registration(DeviceRegistration _devicereg)
         {
-            var responseObject= new ResponseObject();
+            var responseObject = new ResponseObject<dynamic>();
+
             try
             {
-                if (_devicereg.deviceid != "" && _devicereg.warehousecode != "" && _devicereg.deviceid != null && _devicereg.warehousecode != null)
-                { 
-                  using(var connection= _dbConnection.CreateConnection())
+                if (!string.IsNullOrEmpty(_devicereg.deviceid) &&
+                    !string.IsNullOrEmpty(_devicereg.warehousecode))
+                {
+                    using (var connection = _dbConnection.CreateConnection())
                     {
                         connection.Open();
+
                         var parameters = new DynamicParameters();
                         parameters.Add("@userid", _devicereg.deviceid);
                         parameters.Add("@warehouseid", _devicereg.warehousecode);
                         parameters.Add("@LoginName", null);
                         parameters.Add("@Password", null);
 
-                        var result = await _connection.QueryFirstOrDefaultAsync<dynamic>("DeviceRegistration", parameters, commandType: CommandType.StoredProcedure);
+                        var result = await connection.QueryFirstOrDefaultAsync<dynamic>(
+                            "DeviceRegistration",
+                            parameters,
+                            commandType: CommandType.StoredProcedure);
+
                         if (result == null)
-                        { 
-                            responseObject.Status = "Success"; 
+                        {
+                            responseObject.Status = "Success";
                             responseObject.Message = "No data returned from SP";
-                            responseObject.Data = result; 
+                            responseObject.Data = null;
+                            return responseObject;
                         }
-                        responseObject.Status = "Success"; 
-                        responseObject.Message = "Data Saved Successfully!"; 
+
+                        responseObject.Status = "Success";
+                        responseObject.Message = "Data Saved Successfully!";
                         responseObject.Data = result;
+                        return responseObject;
                     }
                 }
-                return (responseObject);
 
-            }
-            catch(Exception ex)
-                 {
                 responseObject.Status = "Error";
-                responseObject.Message = $"Error retrieving invoices: {ex.Message}";
+                responseObject.Message = "Invalid input parameters";
                 responseObject.Data = null;
-                return (responseObject);
+                return responseObject;
+            }
+            catch (Exception ex)
+            {
+                responseObject.Status = "Error";
+                responseObject.Message = $"Error storing device registration: {ex.Message}";
+                responseObject.Data = null;
+                return responseObject;
             }
         }
 
-
-
-        public async Task<ResponseObject> GetWarehouseDetails(WarehouseDetails warehouseModel)
+        public async Task<ResponseObject<List<WarehouseDetails_Model>>> GetWarehouseDetails(WarehouseDetails warehouseModel)
         {
-            var responseObject = new ResponseObject();
+            var responseObject = new ResponseObject<List<WarehouseDetails_Model>>();
+            var keyString = _configuration["EncryptionKey"];
             try
             {
                 using (var connection = _dbConnection.CreateConnection())
@@ -145,12 +159,12 @@ namespace FMS_WebAPI.Repository.RepositoryService
                     parameters.Add("@userid", warehouseModel.userid);
                     parameters.Add("@warehouseid", warehouseModel.warehouseid);
                     var warehouseDetails = await connection.QueryAsync<WarehouseDetails_Model>("Sp_getWarehouseDetails", parameters, commandType: CommandType.StoredProcedure); // Adjust the query as needed
-
                     if (warehouseDetails.Any())
                     {
+                        //var encrypted = _commonService.EncryptionObje(warehouseDetails, keyString);
                         responseObject.Status = "Success";
                         responseObject.Message = "WareHouse Details Fetch Successfully";
-                        responseObject.Data = warehouseDetails;
+                        responseObject.Data =  warehouseDetails.ToList();
                         return (responseObject);
                     }
                     else
@@ -172,9 +186,9 @@ namespace FMS_WebAPI.Repository.RepositoryService
             }
         }
 
-       public async Task<ResponseObject> GetLocationDetails(WarehouseDetails warehouseDetails)
+       public async Task<ResponseObject<List<LocationDetails_Model>>> GetLocationDetails(WarehouseDetails warehouseDetails)
         {
-            var responseObject = new ResponseObject();
+            var responseObject = new ResponseObject<List<LocationDetails_Model>>();
             try
             {
                 using (var connection = _dbConnection.CreateConnection())
@@ -188,7 +202,7 @@ namespace FMS_WebAPI.Repository.RepositoryService
                     {
                         responseObject.Status = "Success";
                         responseObject.Message = "LOCATION_DEATAILS Fetch Successfully";
-                        responseObject.Data = locationDetails;
+                        responseObject.Data = locationDetails.ToList();
                         return (responseObject);
                     }
                     else
@@ -402,8 +416,261 @@ namespace FMS_WebAPI.Repository.RepositoryService
             }
         }
 
-       #region
-       //public async  Task<string> HashPasswordSHA256(string password)
+        public async Task<ResponseObject<string>> ChangePassword(ChangePassword_Model changePassword)
+        {
+            var responseObject = new ResponseObject<string>();
+
+            try
+            {
+                using (var connection = _dbConnection.CreateConnection())
+                {
+                    var parameters = new DynamicParameters();
+                    parameters.Add("@UserId", changePassword.UserId);
+                    parameters.Add("@OldPassword", changePassword.Previouse_Password);
+                    parameters.Add("@NewPassword", changePassword.NewPassword);
+
+                    // Add output parameter
+                    parameters.Add("@responseMessage", dbType: DbType.String, size: 500, direction: ParameterDirection.Output);
+
+                     await connection.ExecuteAsync(
+                        "Sp_ChangePassword",
+                        parameters,
+                        commandType: CommandType.StoredProcedure
+                    );
+                    var responseObj= parameters.Get<string>("@responseMessage");
+                    if(responseObj.Contains("Updated Successfully"))
+                    {
+                        responseObject.Status = "Success";
+                        responseObject.Message = responseObj;
+                        responseObject.Data = responseObj;
+                    }
+                    else
+                    {
+                        responseObject.Status = "Error";
+                        responseObject.Message = responseObj;
+                        responseObject.Data = responseObj;
+                    }
+                    //responseObject.Status = "Success"; // you can still decide to add "Error" based on message content
+                    //responseObject.Message = parameters.Get<string>("@responseMessage");
+                }
+            }
+            catch (Exception ex)
+            {
+                responseObject.Status = "Error";
+                responseObject.Message = ex.Message;
+            }
+
+            return responseObject;
+        }
+
+
+        public async Task<ResponseObject<List<User_MST_Model>>> GetuserDetails_ByEmailId(string email)
+        {
+            var responseObject = new ResponseObject<List<User_MST_Model>>();
+            try
+            {
+                using (var connection = _dbConnection.CreateConnection())
+                {
+                    connection.Open();
+                    var parameters = new DynamicParameters();
+                    parameters.Add("@Email", email);
+                    //parameters.Add("@warehouseid", warehouseModel.warehouseid);
+                    var warehouseDetails = await connection.QueryAsync<User_MST_Model>("Sp_GetUserDetailsByEmail", parameters, commandType: CommandType.StoredProcedure); // Adjust the query as needed
+
+                    if (warehouseDetails.Any())
+                    {
+                        responseObject.Status = "Success";
+                        responseObject.Message = "WareHouse Details Fetch Successfully";
+                        responseObject.Data = warehouseDetails.ToList();
+                        return (responseObject);
+                    }
+                    else
+                    {
+                        responseObject.Status = "Success";
+                        responseObject.Message = "No Data Available";
+                        responseObject.Data = warehouseDetails.ToList();
+                        return (responseObject);
+                    }
+                }
+
+            }
+            catch (Exception ex)
+            {
+                responseObject.Status = "Error";
+                responseObject.Message = $"Error retrieving invoices: {ex.Message}";
+                responseObject.Data = null;
+                return (responseObject);
+            }
+        }
+
+        public async Task<IEnumerable<ResetPasswordOutPut_List>> GetResetPasswordAsync(string TEMPPASSWORD, string LoginName)
+        {
+            try
+            {
+                string strMessage = string.Empty;
+                string Email= string.Empty;
+                int ErrorNumber = 0;
+                const string validChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?";
+                StringBuilder password = new StringBuilder();
+                Random random = new Random();
+
+                for (int i = 0; i < 10; i++)
+                {
+                    password.Append(validChars[random.Next(validChars.Length)]);
+                }
+                TEMPPASSWORD = password.ToString();
+
+                using (IDbConnection db = _dbConnection.CreateConnection())
+                {
+                    var parmeters = new DynamicParameters();
+                    parmeters.Add("@TEMPPASSWORD", TEMPPASSWORD);
+                    parmeters.Add("@LoginName", LoginName);
+                    var ResetPass = await db.QueryAsync<ResetPasswordOutPut>("sp_reset_password", parmeters, commandType: CommandType.StoredProcedure);
+
+                    foreach (var ResetResponse in ResetPass)
+                    {
+                        ErrorNumber = ResetResponse.ErrorNumber;
+                        strMessage = ResetResponse.Message;
+                        Email= ResetResponse.EMAIL_ID_OFFICIAL;
+                    }
+
+                    if (ErrorNumber == 0)
+                    {
+                        //var AssiLoginName = await db.QueryAsync<string>(" Select UPPER(LEFT(FIRST_NAME,1))+LOWER(SUBSTRING(FIRST_NAME,2,LEN(FIRST_NAME))) + ' '+ " +
+                        //           " UPPER(LEFT(LAST_NAME,1))+LOWER(SUBSTRING(LAST_NAME,2,LEN(LAST_NAME))) as EMP_FULL_NAME " +
+                        //           " from EMPLOYEE_MST EMP_MST where " +
+                        //           " (EMP_MST.EMAIL_ID_OFFICIAL = '" + LoginName + "' " +
+                        //           " or Cast(EMP_MST.CONTACT_NO As nVarchar(20))= '" + LoginName + "')  " +
+                        //           " and EMP_MST.DELETE_FLAG='N' ", commandType: CommandType.Text);
+                        //string AssignBy = AssiLoginName.FirstOrDefault();
+
+                        var parmetersMail = new DynamicParameters();
+                        parmetersMail.Add("@MAIL_TYPE", "Auto");
+                        var MailDetails = await db.QueryAsync<MailDetailsNT>("SP_GET_MAIL_TYPE", parmetersMail, commandType: CommandType.StoredProcedure);
+
+                        string MailBody = "<!DOCTYPE html>\r\n<html>\r\n<head>\r\n    " +
+                            "<meta charset=\"UTF-8\">\r\n    " +
+                            "<title>QUI Password Reset</title>\r\n</head>" +
+                            "\r\n<body style=\"font-family: Arial, sans-serif; font-size: 14px; color: #333;\">\r\n    " +
+                            "<p>Dear <strong>" + LoginName + " </strong>,</p>\r\n\r\n    " +
+                            "<p>Your password for <strong>QUI</strong> has been successfully reset.</p>\r\n\r\n    " +
+                            "<p>Your temporary password is: <strong style=\"color: #d9534f;\">" + TEMPPASSWORD.ToString() + "</strong></p>\r\n\r\n    " +
+                            "<p>Please log in to <strong><a href=\"https://qui.piplapps.com\">QUI</a></strong> using this password and update it immediately for security reasons.</p>\r\n\r\n    " +
+                            "<p>If you have any questions or need assistance, feel free to contact us at \r\n       " +
+                            " <a href=\"mailto:qui.support@powersoft.in\">qui.support@powersoft.in</a>.\r\n    " +
+                            "</p>\r\n\r\n    <p>Best regards,<br>\r\n    " +
+                            "<strong>QUI Team</strong></p>\r\n</body>\r\n</html>\r\n";
+
+                        foreach (var Mail in MailDetails)
+                        {
+                            //_commonService.SendEmail(Email, null, null, "FMS-Your Temporary Password", MailBody, "Auto","FMS", null, Mail);  //Mail.MAIL_TYPE
+                        }
+
+                        var successsResult = new List<ResetPasswordOutPut_List>
+                            {
+                                new ResetPasswordOutPut_List
+                                {
+                                    Status = "Ok",
+                                    Message = strMessage,
+                                    Data= ResetPass
+                                }
+                            };
+                        return successsResult;
+                    }
+                    else
+                    {
+                        var successsResult = new List<ResetPasswordOutPut_List>
+                            {
+                                new ResetPasswordOutPut_List
+                                {
+                                    Status = "Error",
+                                    Message = strMessage,
+                                    Data= null
+                                }
+                            };
+                        return successsResult;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                var errorResult = new List<ResetPasswordOutPut_List>
+                    {
+                        new ResetPasswordOutPut_List
+                        {
+                           Status = "Error",
+                            Message= ex.Message,
+                            Data= null
+                        }
+                    };
+                return errorResult;
+            }
+        }
+
+        public async Task<IEnumerable<ForgotPasswordOutPut_List>> GetForgotPasswordAsync(string LoginName)
+        {
+            try
+            {
+                using (IDbConnection db = _dbConnection.CreateConnection())
+                {
+                    int ErrorNumber = 0;
+                    string ResponseMeaage = string.Empty;
+                    var parmeters = new DynamicParameters();
+                    parmeters.Add("@LoginName", LoginName);
+                    var ForgotPass = await db.QueryAsync<ForgotPasswordOutPut>("Sp_USER_ForgotPassword", parmeters, commandType: CommandType.StoredProcedure);
+                    foreach (var SuccessMsg in ForgotPass)
+                    {
+                        ErrorNumber = SuccessMsg.ErrorNumber;
+                        ResponseMeaage = SuccessMsg.MessageText;
+                    }
+                    if (ErrorNumber != 1)
+                    {
+                        var ErrorResult = new List<ForgotPasswordOutPut_List>
+                        {
+                            new ForgotPasswordOutPut_List
+                            {
+                                Status = "Error",
+                                Message = ResponseMeaage,
+                                Data= ForgotPass
+                            }
+                        };
+                        return ErrorResult;
+                    }
+                    else
+                    {
+                        var successsResult = new List<ForgotPasswordOutPut_List>
+                        {
+                            new ForgotPasswordOutPut_List
+                            {
+                                Status = "Ok",
+                                Message = "Message",
+                                Data= ForgotPass
+                            }
+                        };
+                        return successsResult;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                var errorResult = new List<ForgotPasswordOutPut_List>
+                    {
+                        new ForgotPasswordOutPut_List
+                        {
+                           Status = "Error",
+                            Message= ex.Message,
+                            Data= null
+                        }
+                    };
+                return errorResult;
+            }
+        }
+
+
+
+
+        #region
+        //public async  Task<string> HashPasswordSHA256(string password)
         //{
         //    using (SHA256 sha256Hash = SHA256.Create())
         //    {
@@ -726,6 +993,6 @@ namespace FMS_WebAPI.Repository.RepositoryService
         //        return $"An error occurred: {ex.Message}";
         //    }
         //}
-       #endregion
+        #endregion
     }
 }

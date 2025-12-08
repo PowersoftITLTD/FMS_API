@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using Newtonsoft.Json;
+using System.ComponentModel.DataAnnotations;
 
 namespace FMS_WebAPI.Model
 {
@@ -82,5 +83,25 @@ namespace FMS_WebAPI.Model
     public class EncryptedLogin_Model
     {
         public string loginCredential { get; set; }
+    }
+
+    public class ChangesPasswordEncrypt_Model
+    {
+        public string? changePassword { get; set;}
+    }
+
+    public class ChangePassword_Model
+    {
+        [JsonProperty("userId")]
+        public string UserId { get; set; }
+        [JsonProperty("previouse_Password")]
+        public string Previouse_Password { get; set; }
+        [JsonProperty("NewPassword")]
+        public string NewPassword { get; set; }
+    }
+
+    public class CommonEncryptRsw
+    {
+        public string? encryptjosn { get; set; }
     }
 }

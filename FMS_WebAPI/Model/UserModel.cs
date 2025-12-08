@@ -1,4 +1,6 @@
-﻿namespace FMS_WebAPI.Model
+﻿using System.Text.Json.Serialization;
+
+namespace FMS_WebAPI.Model
 {
     public class UserModel
     {
@@ -38,5 +40,22 @@
         public int Id { get; set; }
         public string Name { get; set; }
         public string Email { get; set; }
+    }
+
+    public class ForgotPasswordOutPut_List
+    {
+        [JsonPropertyName("Status")]
+        public string? Status { get; set; }
+        [JsonPropertyName("Message")]
+        public string? Message { get; set; }
+
+        public IEnumerable<ForgotPasswordOutPut> Data { get; set; }
+    }
+    public class ForgotPasswordOutPut
+    {
+        [JsonPropertyName("MessageText")]
+        public string? MessageText { get; set; }
+        [JsonIgnore]
+        public int ErrorNumber { get; set; }
     }
 }

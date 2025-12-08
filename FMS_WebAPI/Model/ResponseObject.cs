@@ -2,11 +2,11 @@
 
 namespace FMS_WebAPI.Model
 {
-    public class ResponseObject
+    public class ResponseObject<T>
     {
         public string Status { get; set; }
         public string Message { get; set; }
-        public object Data { get; set; } // You can make Data generic if needed
+        public T Data { get; set; } // You can make Data generic if needed
     }
 
     public class EncryptedPayload

@@ -31,7 +31,7 @@ namespace FMS_WebAPI.Controllers
          [HttpGet("GetUploads_NT")]
          public async Task<IActionResult> GetUploads()
             {
-                var responseObject = new ResponseObject();
+                var responseObject = new ResponseObject<object>();
                 try
                 {
                     int parameter1 = 0;
@@ -84,7 +84,7 @@ namespace FMS_WebAPI.Controllers
         [HttpGet("GetUploadFileRec-By_Mkey_NT")]
         public async Task<IActionResult> GetUploadFileRec(string mkey)
         {
-            var responseObject = new ResponseObject();
+            var responseObject = new ResponseObject<object>();
             try
             {
                 using var connection = _dbConnection.CreateConnection();
@@ -121,7 +121,7 @@ namespace FMS_WebAPI.Controllers
         [HttpPost("ReadFileUploaded_NT")]
         public async Task<IActionResult> ReadFileUploaded([FromBody] ReadFileUpload_Model upload_Model)
         {
-            var responseObject = new ResponseObject();
+            var responseObject = new ResponseObject<object>();
 
             try
             {
@@ -175,7 +175,7 @@ namespace FMS_WebAPI.Controllers
         [HttpPost("Dashboard-insertUploadFile")]
         public async Task<IActionResult> InsertUploadFile([FromBody] FileUploadModel fileUpload)
         {
-            var responseObject = new ResponseObject();
+            var responseObject = new ResponseObject<object>();
             if (fileUpload.FileAttachment == null || fileUpload.FileAttachment.Length == 0) 
             { 
                 return BadRequest(new { status = "error", message = "File not provided" }); 
