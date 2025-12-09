@@ -98,6 +98,8 @@ namespace FMS_WebAPI.Model
         public string Previouse_Password { get; set; }
         [JsonProperty("NewPassword")]
         public string NewPassword { get; set; }
+        public int? Session_UserId { get; set; }
+        public int? Business_Groupid { get; set; }
     }
 
     public class CommonEncryptRsw

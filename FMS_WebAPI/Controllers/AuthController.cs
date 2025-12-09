@@ -79,6 +79,54 @@ namespace FMS_WebAPI.Controllers
             }
         }
 
+        [HttpPost("WMSBarCode-Login/Registration")]
+        public async Task<IActionResult> LoginRegistration(DeviceRegistration deviceRegistration)
+        {
+            var responseObject = new ResponseObject<object>();
+            try
+            {
+                if (deviceRegistration == null || string.IsNullOrEmpty(deviceRegistration.deviceid) || string.IsNullOrEmpty(deviceRegistration.warehousecode))
+                {
+                    responseObject.Status = "Error";
+                    responseObject.Message = "Please enter a valid DeviceId and WareHouseCode.";
+                    return Ok(responseObject);
+                    //return Ok(new { message = "Please Entry Valide User & Password " });
+                }
+
+                var result = await _authService.WMSBarCode_Registration(deviceRegistration);
+                if (result.Status.Contains("success"))
+                {
+                    // Return result as an Ok response
+                    responseObject.Status = "Ok";
+                    responseObject.Message = result.Message;
+                    responseObject.Data = result;
+                    //responseObject.Data = new { message = result };
+                    return Ok(responseObject);
+                }
+                else
+                {
+                    // Return result as an Ok response
+                    responseObject.Status = "Error";
+                    responseObject.Message = result.Message;
+                    responseObject.Data = result.Data;
+                    return Ok(responseObject);
+                }
+            }
+            catch (Exception ex)
+            {
+
+                responseObject.Status = "Error";
+                responseObject.Message = "An error occurred during login/registration.";
+                responseObject.Data = new { error = ex.Message };
+                return StatusCode(StatusCodes.Status500InternalServerError, responseObject);
+                // Log and return error response
+                // return StatusCode(500, new { message = "An error occurred", error = ex.Message });
+
+            }
+        }
+
+
+        [Authorize]
         [HttpPost("WMSBarCode-ValidateLoginWithWHCode")]
         public async Task<IActionResult> ValidateLoginWithWHCode([FromBody] UserWarehouseCode userwareHouse)
         {
@@ -128,36 +176,48 @@ namespace FMS_WebAPI.Controllers
             }
         }
 
-        [HttpPost("WMSBarCode-Login/Registration")]
-        public async Task<IActionResult> LoginRegistration(DeviceRegistration deviceRegistration)
+        [HttpPost("Login_NT")]
+        public async Task<IActionResult> EncryptedLogin_User([FromBody] EncryptedLogin_Model encryptedLogin)
         {
             var responseObject = new ResponseObject<object>();
+            var userModel = new UserModel();
             try
             {
-                if (deviceRegistration == null || string.IsNullOrEmpty(deviceRegistration.deviceid) || string.IsNullOrEmpty(deviceRegistration.warehousecode))
+                //var Passwordhash = Convert.ToByte(Password);
+                var keyString = _configuration["EncryptionKey"];
+                var PassworsHash = _authService.DecryptPassword(encryptedLogin.loginCredential, keyString);
+                if (PassworsHash != null)
                 {
-                    responseObject.Status = "Error";
-                    responseObject.Message = "Please enter a valid DeviceId and WareHouseCode.";
-                    return Ok(responseObject);
-                    //return Ok(new { message = "Please Entry Valide User & Password " });
+                    string[] strDatat = PassworsHash.Split(':');
+                    if (strDatat.Length >= 0)
+                    {
+                        userModel = new UserModel
+                        {
+                            Username = strDatat[0],
+                            Password = strDatat[1]
+                        };
+                    }
                 }
-
-                var result = await _authService.WMSBarCode_Registration(deviceRegistration);
-                if (result.Status.Contains("success"))
+                var result = await _authService.VerifyingResponse(userModel.Username, userModel.Password);
+                var userNameCom = userModel.Username + ":" + userModel.Password;
+                var userDetails = _commonService.EncryptionObje(result.User, keyString);
+                var WareHouseDetails = _commonService.EncryptionObje(result.Warehouses, keyString);
+                //string encryptedUser = _commonService.EncryptionObje(userNameCom, keyString);
+                if (!string.IsNullOrEmpty(result.User.EMAIL) && (!string.IsNullOrEmpty(result.User.LOGIN_NAME)))
                 {
-                    // Return result as an Ok response
                     responseObject.Status = "Ok";
-                    responseObject.Message = result.Message;
-                    responseObject.Data= result;
-                    //responseObject.Data = new { message = result };
+                    responseObject.Message = "User successfully Decrypted logged in Credential";
+                    responseObject.Data = new { token = result.Token, User = userDetails, WareHouse = WareHouseDetails };// encryptedUser;//result;
+                    var Dcs = _commonService.DecryptObject<UserDetailsModel>(userDetails, keyString);
+                    //return Ok(new { Message = userModel, Status = "Ok" });
                     return Ok(responseObject);
                 }
                 else
                 {
-                    // Return result as an Ok response
                     responseObject.Status = "Error";
-                    responseObject.Message = result.Message;
-                    responseObject.Data = result.Data;
+                    responseObject.Message = "User Decryption Failed";
+                    responseObject.Data = result;
+                    //return Ok(new { Message = userModel, Status = "Ok" });
                     return Ok(responseObject);
                 }
             }
@@ -168,9 +228,116 @@ namespace FMS_WebAPI.Controllers
                 responseObject.Message = "An error occurred during login/registration.";
                 responseObject.Data = new { error = ex.Message };
                 return StatusCode(StatusCodes.Status500InternalServerError, responseObject);
-                // Log and return error response
+                // return StatusCode(500, responseObject);
+                //throw;
                 // return StatusCode(500, new { message = "An error occurred", error = ex.Message });
+            }
+        }
 
+        [HttpPost("ForgetPassword")]
+        public async Task<IActionResult> ForgetPassword([FromBody] CommonEncryptRsw encryptRsw)
+        {
+            var responseObject = new ResponseObject<object>();
+            var userModel = new UserModel();
+            try
+            {
+                //var Passwordhash = Convert.ToByte(Password);
+                var keyString = _configuration["EncryptionKey"];
+                //string encryptedUser = _commonService.EncryptionObje(encryptRsw.encryptjosn, keyString);
+                var forgetPaswordModel = _commonService.DecryptObject<string>(encryptRsw.encryptjosn, keyString);  //encryptRsw.encryptjosn
+                //var PassworsHash = _authService.DecryptPassword(changesPassword.changePassword, keyString);
+                //if (PassworsHash != null)
+                //{
+                //    string[] strDatat = PassworsHash.Split(':');
+                //    if (strDatat.Length >= 0)
+                //    {
+                //        userModel = new UserModel
+                //        {
+                //            Username = strDatat[0],
+                //            Password = strDatat[1]
+                //        };
+                //    }
+                //}
+
+                var user_Mst_details = await _authService.GetuserDetails_ByEmailId(forgetPaswordModel);
+
+                var ForgotPass = await _authService.GetForgotPasswordAsync(forgetPaswordModel);
+
+                if (ForgotPass == null)
+                {
+                    var responseTaskAction = new ResponseObject<object>
+                    {
+                        Status = "Error",
+                        Message = "Error Occurd",
+                        Data = null
+                    };
+                    return Ok(responseTaskAction);
+                }
+                if (forgetPaswordModel == null)
+                {
+                    var responseTaskAction = new ResponseObject<object>
+                    {
+                        Status = "Error",
+                        Message = "Error Occurd LoginName",
+                        Data = null
+                    };
+                    return Ok(responseTaskAction);
+                }
+                foreach (var Response in ForgotPass)
+                {
+                    if (Response.Status != "Ok")
+                    {
+                        var response = new ResetPasswordOutPut_List
+                        {
+                            Status = "Error",
+                            Message = Response.Message,
+                            Data = null
+                        };
+                        return Ok(response);
+                    }
+                }
+                string TempararyPass = string.Empty;
+                foreach (var TempPaass in ForgotPass)
+                {
+                    TempararyPass = TempPaass.Data.Select(x => x.MessageText.ToString()).First().ToString();
+                }
+
+                var ResetPass = await _authService.GetResetPasswordAsync(TempararyPass, forgetPaswordModel);
+
+                if (ResetPass == null)
+                {
+                    var responseTaskAction = new ResponseObject<object>
+                    {
+                        Status = "Error",
+                        Message = "Error Occurd",
+                        Data = null
+                    };
+                    return Ok(responseTaskAction);
+                }
+                else
+                {
+                    var ResetpasswordData = ResetPass.Select(x => x.Data).FirstOrDefault();
+                    string encryptedUser = _commonService.EncryptionObje(ResetpasswordData, keyString);
+                    //var DESc = _commonService.DecryptObject<string>(encryptedUser, keyString);  // This Part for Decrypt the Data only For Testing
+                    var responseTaskAction = new ResponseObject<object>
+                    {
+                        Status = "Ok",
+                        Message = "Password Reset Successfully",
+                        Data = encryptedUser
+                    };
+                    return Ok(responseTaskAction);
+                }
+            }
+            catch (Exception ex)
+            {
+
+                responseObject.Status = "Error";
+                responseObject.Message = "An error occurred during login/registration.";
+                responseObject.Data = new { error = ex.Message };
+                return StatusCode(StatusCodes.Status500InternalServerError, responseObject);
+                // return StatusCode(500, responseObject);
+                //throw;
+                // return StatusCode(500, new { message = "An error occurred", error = ex.Message });
             }
         }
 
@@ -304,7 +471,8 @@ namespace FMS_WebAPI.Controllers
 
         #region
         // File Decryption method Here 
-        [HttpPost("Encrypted-Upload-File_TEST")]
+        [Authorize]
+        [HttpPost("Upload-File_NT")]
         public async Task<IActionResult> UploadEncryptedFile([FromBody] EncryptedFileDto dto)
         {
             try
@@ -377,66 +545,10 @@ namespace FMS_WebAPI.Controllers
             }
         }
 
-        [HttpPost("Login_NT")]
-        public async Task<IActionResult> EncryptedLogin_User([FromBody]EncryptedLogin_Model encryptedLogin)
-        {
-            var responseObject= new ResponseObject<object>();
-            var userModel = new UserModel();
-            try
-            {
-                //var Passwordhash = Convert.ToByte(Password);
-                var keyString = _configuration["EncryptionKey"];
-                var PassworsHash = _authService.DecryptPassword(encryptedLogin.loginCredential, keyString);
-                if (PassworsHash != null)
-                {
-                    string[] strDatat = PassworsHash.Split(':');
-                    if (strDatat.Length >= 0)
-                    {
-                        userModel = new UserModel
-                        {
-                            Username = strDatat[0],
-                            Password = strDatat[1]
-                        };
-                    }
-                }
-                var result = await _authService.VerifyingResponse(userModel.Username, userModel.Password);
-                var userNameCom = userModel.Username + ":" + userModel.Password;
-                var userDetails = _commonService.EncryptionObje(result.User, keyString);
-                var WareHouseDetails = _commonService.EncryptionObje(result.Warehouses, keyString);
-                //string encryptedUser = _commonService.EncryptionObje(userNameCom, keyString);
-                if (!string.IsNullOrEmpty(result.User.EMAIL) && (!string.IsNullOrEmpty(result.User.LOGIN_NAME)))
-                {
-                    responseObject.Status = "Ok";
-                    responseObject.Message = "User successfully Decrypted logged in Credential";
-                    responseObject.Data = new { token = result.Token, User = userDetails, WareHouse = WareHouseDetails };// encryptedUser;//result;
-                    var Dcs = _commonService.DecryptObject<UserDetailsModel>(userDetails, keyString);
-                    //return Ok(new { Message = userModel, Status = "Ok" });
-                    return Ok(responseObject);
-                }
-                else
-                {
-                    responseObject.Status = "Error";
-                    responseObject.Message = "User Decryption Failed";
-                    responseObject.Data = result;
-                    //return Ok(new { Message = userModel, Status = "Ok" });
-                    return Ok(responseObject);
-                }
-            }
-            catch (Exception ex)
-            {
-
-                responseObject.Status = "Error";
-                responseObject.Message = "An error occurred during login/registration.";
-                responseObject.Data = new { error = ex.Message };
-                return StatusCode(StatusCodes.Status500InternalServerError, responseObject);
-                // return StatusCode(500, responseObject);
-                //throw;
-                // return StatusCode(500, new { message = "An error occurred", error = ex.Message });
-            }
-        }
+        
 
         // Changes Password Started
-
+        [Authorize]
         [HttpPost("ChangesPassword")]
         public async Task<IActionResult>ChangePassword([FromBody] ChangesPasswordEncrypt_Model changesPassword)  //ChangesPasswordEncrypt_Model
         {
@@ -493,111 +605,7 @@ namespace FMS_WebAPI.Controllers
             }
         }
 
-        [HttpPost("ForgetPassword")]
-        public async Task<IActionResult> ForgetPassword([FromBody] CommonEncryptRsw encryptRsw)
-        {
-            var responseObject = new ResponseObject<object>();
-            var userModel = new UserModel();
-            try
-            {
-                //var Passwordhash = Convert.ToByte(Password);
-                var keyString = _configuration["EncryptionKey"];
-                //string encryptedUser = _commonService.EncryptionObje(encryptRsw.encryptjosn, keyString);
-                var forgetPaswordModel = _commonService.DecryptObject<string>(encryptRsw.encryptjosn, keyString);  //encryptRsw.encryptjosn
-                //var PassworsHash = _authService.DecryptPassword(changesPassword.changePassword, keyString);
-                //if (PassworsHash != null)
-                //{
-                //    string[] strDatat = PassworsHash.Split(':');
-                //    if (strDatat.Length >= 0)
-                //    {
-                //        userModel = new UserModel
-                //        {
-                //            Username = strDatat[0],
-                //            Password = strDatat[1]
-                //        };
-                //    }
-                //}
-
-                var user_Mst_details = await _authService.GetuserDetails_ByEmailId(forgetPaswordModel);
-
-                var ForgotPass = await _authService.GetForgotPasswordAsync(forgetPaswordModel);
-
-                if (ForgotPass == null)
-                {
-                    var responseTaskAction = new ResponseObject<object>
-                    {
-                        Status = "Error",
-                        Message = "Error Occurd",
-                        Data = null
-                    };
-                    return Ok(responseTaskAction);
-                }
-                if (forgetPaswordModel == null)
-                {
-                    var responseTaskAction = new ResponseObject<object>
-                    {
-                        Status = "Error",
-                        Message = "Error Occurd LoginName",
-                        Data = null
-                    };
-                    return Ok(responseTaskAction);
-                }
-                foreach (var Response in ForgotPass)
-                {
-                    if (Response.Status != "Ok")
-                    {
-                        var response = new ResetPasswordOutPut_List
-                        {
-                            Status = "Error",
-                            Message = Response.Message,
-                            Data = null
-                        };
-                        return Ok(response);
-                    }
-                }
-                string TempararyPass = string.Empty;
-                foreach (var TempPaass in ForgotPass)
-                {
-                    TempararyPass = TempPaass.Data.Select(x => x.MessageText.ToString()).First().ToString();
-                }
-
-                var ResetPass = await _authService.GetResetPasswordAsync(TempararyPass, forgetPaswordModel);
-
-                if (ResetPass == null)
-                {
-                    var responseTaskAction = new ResponseObject<object>
-                    {
-                        Status = "Error",
-                        Message = "Error Occurd",
-                        Data = null
-                    };
-                    return Ok(responseTaskAction);
-                }else
-                {
-                    var ResetpasswordData = ResetPass.Select(x =>x.Data).FirstOrDefault();
-                    string encryptedUser = _commonService.EncryptionObje(ResetpasswordData, keyString);
-                    //var DESc = _commonService.DecryptObject<string>(encryptedUser, keyString);  // This Part for Decrypt the Data only For Testing
-                    var responseTaskAction = new ResponseObject<object>
-                    {
-                        Status = "Ok",
-                        Message = "Password Reset Successfully",
-                        Data = encryptedUser
-                    };
-                    return Ok(responseTaskAction);
-                }
-            }
-            catch (Exception ex)
-            {
-
-                responseObject.Status = "Error";
-                responseObject.Message = "An error occurred during login/registration.";
-                responseObject.Data = new { error = ex.Message };
-                return StatusCode(StatusCodes.Status500InternalServerError, responseObject);
-                // return StatusCode(500, responseObject);
-                //throw;
-                // return StatusCode(500, new { message = "An error occurred", error = ex.Message });
-            }
-        }
+        
 
         #endregion
         #region

@@ -158,6 +158,8 @@ namespace FMS_WebAPI.Repository.RepositoryService
                     var parameters = new DynamicParameters();
                     parameters.Add("@userid", warehouseModel.userid);
                     parameters.Add("@warehouseid", warehouseModel.warehouseid);
+                    parameters.Add("@Session_UserId", warehouseModel.Session_UserId);
+                    parameters.Add("@Business_Groupid", warehouseModel.Business_Groupid);
                     var warehouseDetails = await connection.QueryAsync<WarehouseDetails_Model>("Sp_getWarehouseDetails", parameters, commandType: CommandType.StoredProcedure); // Adjust the query as needed
                     if (warehouseDetails.Any())
                     {
@@ -197,6 +199,8 @@ namespace FMS_WebAPI.Repository.RepositoryService
                     var parameters = new DynamicParameters();
                     parameters.Add("@userid", warehouseDetails.userid);
                     parameters.Add("@warehouseid", warehouseDetails.warehouseid);
+                    parameters.Add("@Session_UserId", warehouseDetails.Session_UserId);
+                    parameters.Add("@Business_Groupid", warehouseDetails.Business_Groupid);
                     var locationDetails = await connection.QueryAsync<LocationDetails_Model>("Sp_getLocationDetails", parameters, commandType: CommandType.StoredProcedure); // Adjust the query as needed
                     if (locationDetails.Any())
                     {
@@ -428,7 +432,8 @@ namespace FMS_WebAPI.Repository.RepositoryService
                     parameters.Add("@UserId", changePassword.UserId);
                     parameters.Add("@OldPassword", changePassword.Previouse_Password);
                     parameters.Add("@NewPassword", changePassword.NewPassword);
-
+                    parameters.Add("@Session_UserId", changePassword.Session_UserId);
+                    parameters.Add("@Business_Groupid", changePassword.Business_Groupid);
                     // Add output parameter
                     parameters.Add("@responseMessage", dbType: DbType.String, size: 500, direction: ParameterDirection.Output);
 
@@ -665,9 +670,6 @@ namespace FMS_WebAPI.Repository.RepositoryService
                 return errorResult;
             }
         }
-
-
-
 
         #region
         //public async  Task<string> HashPasswordSHA256(string password)

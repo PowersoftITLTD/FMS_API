@@ -42,9 +42,7 @@ namespace FMS_WebAPI.Controllers
                     string parameter6 = null;
                     string parameter7 = null;
                     string parameter8 = null;
-                
                     using var connection = _dbConnection.CreateConnection();
-
                     // Setup Dapper parameters
                     var parameters = new DynamicParameters();
                     parameters.Add("@Parameter1", parameter1, DbType.Int32);
@@ -55,7 +53,6 @@ namespace FMS_WebAPI.Controllers
                     parameters.Add("@Parameter6", parameter6, DbType.String);
                     parameters.Add("@Parameter7", parameter7, DbType.String);
                     parameters.Add("@Parameter8", parameter8, DbType.String);
-
                     // Execute stored procedure and map to Invoice model
                     var invoices = await connection.QueryAsync<Invoice_Model>("SP_GET_INVOICE_DEATAILS",parameters,commandType: CommandType.StoredProcedure);
                     if (invoices.Any())
@@ -82,16 +79,17 @@ namespace FMS_WebAPI.Controllers
             }
 
         [HttpGet("GetUploadFileRec-By_Mkey_NT")]
-        public async Task<IActionResult> GetUploadFileRec(string mkey)
+        public async Task<IActionResult> GetUploadFileRec(string mkey ,int? Session_userId ,int?Business_GroupId)
         {
             var responseObject = new ResponseObject<object>();
             try
             {
                 using var connection = _dbConnection.CreateConnection();
-
                 var parameters = new DynamicParameters();
                 parameters.Add("@Parameter1", mkey, DbType.Decimal);
                 parameters.Add("@Parameter2", 0, DbType.Decimal); // optional
+                parameters.Add("@Session_userId", Session_userId, DbType.Int32); // optional
+                parameters.Add("@Business_GroupId", Business_GroupId, DbType.Int32); // optional
                 // Execute stored procedure and map results
                 var documents = await connection.QueryAsync<InvoiceDocumentModel>("SP_GET_INVOICE_DOC_DEATAILS",parameters,commandType: CommandType.StoredProcedure);
                 if (documents.Any())
@@ -185,7 +183,6 @@ namespace FMS_WebAPI.Controllers
             { 
                 await fileUpload.FileAttachment.CopyToAsync(ms); fileBytes = ms.ToArray(); 
             }
-            
             try
             {
                 using var connection = _dbConnection.CreateConnection();
