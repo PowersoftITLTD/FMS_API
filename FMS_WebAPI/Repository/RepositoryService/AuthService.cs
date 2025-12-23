@@ -671,6 +671,40 @@ namespace FMS_WebAPI.Repository.RepositoryService
             }
         }
 
+        public async Task<ResponseVerifying_Validate> GetCheckUserName_PasswordVerifying(UserModel userModel)
+        {
+            var response = new ResponseVerifying_Validate();
+
+            using (IDbConnection db = _dbConnection.CreateConnection())
+            {
+                if (db.State != ConnectionState.Open)
+                    db.Open();
+
+                var parameters = new DynamicParameters();
+                parameters.Add("@LoginName", userModel.Username, DbType.String, ParameterDirection.Input);
+                parameters.Add("@Password", userModel.Password, DbType.String, ParameterDirection.Input);
+
+                parameters.Add("@responseMessage", dbType: DbType.String,
+                               direction: ParameterDirection.Output, size: 4000);
+
+                parameters.Add("@status_flag", dbType: DbType.Boolean,
+                               direction: ParameterDirection.Output);
+
+                await db.ExecuteAsync(
+                    "Sp_Validate_UserNamePassword",
+                    parameters,
+                    commandType: CommandType.StoredProcedure
+                );
+
+                response.Message = parameters.Get<string>("@responseMessage");
+                response.flag_Status = parameters.Get<bool>("@status_flag");
+                response.Status = response.flag_Status ? "SUCCESS" : "FAILED";
+            }
+
+            return response;
+        }
+
+
         #region
         //public async  Task<string> HashPasswordSHA256(string password)
         //{

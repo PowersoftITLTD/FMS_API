@@ -1,6 +1,8 @@
-﻿using FMS_WebAPI.Model;
+﻿using Dapper;
+using FMS_WebAPI.Model;
 using FMS_WebAPI.Repository.IRepositoryService;
 using Microsoft.Extensions.Options;
+using System.Data;
 using System.Data.SqlClient;
 using System.Net;
 using System.Net.Mail;
@@ -260,5 +262,184 @@ namespace FMS_WebAPI.Repository.RepositoryService
                 return strerror;
             }
         }
+
+        public async Task<string> InsertInvoice_DOC_TRl(DocumentUploadModel documentUpload)
+        {
+            try
+            {
+                using (IDbConnection db = _dbConnection.CreateConnection())
+                {
+                    db.Open(); // Ensure connection is open
+                               using (var transaction = db.BeginTransaction()) 
+                    { 
+                        try 
+                        {
+                            //byte[] fileBytes = Base64ToVarbinarySafe(documentUpload.FILECONTENTS); 
+                            byte[] fileBytes = Base64ToVarbinarySafe(documentUpload.FILECONTENTS);
+                            var parameters = new DynamicParameters(); 
+                            parameters.Add("@MKEY", documentUpload.MKEY); 
+                            parameters.Add("@DOC_NAME", string.IsNullOrEmpty(documentUpload.DOC_NAME)?null :documentUpload.DOC_NAME); 
+                            parameters.Add("@DOC_TYPE", string.IsNullOrEmpty(documentUpload.DOC_TYPE) ? null : documentUpload.DOC_TYPE); 
+                            parameters.Add("@FILE_NAME", string.IsNullOrEmpty(documentUpload.FILE_NAME) ? null : documentUpload.FILE_NAME);
+                            parameters.Add("@FILECONTENTS",(fileBytes == null || fileBytes.Length == 0)? (object)DBNull.Value: fileBytes,DbType.Binary);
+                            //parameters.Add("@FILECONTENTS", fileBytes,DbType.Binary); // or DBNull.Value
+                            parameters.Add("@FILECONTENTVAR", string.IsNullOrEmpty(documentUpload.FILECONTENTVAR) ? null : documentUpload.FILECONTENTVAR ,DbType.String ,size :-1);
+                            parameters.Add("@UPLOADED_BY", documentUpload.UPLOADED_BY > 0 ? documentUpload.UPLOADED_BY :(object)DBNull.Value,DbType.Int64); 
+                            parameters.Add("@IS_MANDATORY", string.IsNullOrEmpty(documentUpload.IS_MANDATORY) ? "Y" : documentUpload.IS_MANDATORY); 
+                            parameters.Add("@STATUS_FLAG", string.IsNullOrEmpty(documentUpload.STATUS_FLAG) ? "P" : documentUpload.STATUS_FLAG); 
+                            parameters.Add("@APPROVER_ID", documentUpload.APPROVER_ID > 0 ? documentUpload.APPROVER_ID : (object)DBNull.Value , DbType.Int64); 
+                            parameters.Add("@ATTRIBUTE1", string.IsNullOrEmpty(documentUpload.ATTRIBUTE1) ? null : documentUpload.ATTRIBUTE1); 
+                            parameters.Add("@ATTRIBUTE2", string.IsNullOrEmpty(documentUpload.ATTRIBUTE2) ? null : documentUpload.ATTRIBUTE2); 
+                            parameters.Add("@ATTRIBUTE3", string.IsNullOrEmpty(documentUpload.ATTRIBUTE3) ? null : documentUpload.ATTRIBUTE3); 
+                            parameters.Add("@ATTRIBUTE4", string.IsNullOrEmpty(documentUpload.ATTRIBUTE4) ? null : documentUpload.ATTRIBUTE4); 
+                            parameters.Add("@ATTRIBUTE5", string.IsNullOrEmpty(documentUpload.ATTRIBUTE5) ? null : documentUpload.ATTRIBUTE5); 
+                            parameters.Add("@CREATED_BY", documentUpload.CREATED_BY); 
+                            parameters.Add("@LAST_UPDATED_BY", documentUpload.LAST_UPDATED_BY > 0 ? documentUpload.LAST_UPDATED_BY : (object)DBNull.Value, DbType.Int64); 
+                            parameters.Add("@LAST_UPDATE_DATE", documentUpload.LAST_UPDATE_DATE.HasValue ? documentUpload.LAST_UPDATE_DATE.Value: (object)DBNull.Value ,DbType.DateTime); // Output parameters
+                            parameters.Add("@NewSrNo", dbType: DbType.Int64, direction: ParameterDirection.Output); 
+                            parameters.Add("@ResponseMessage", dbType: DbType.String, size: 200, direction: ParameterDirection.Output); 
+                            // Execute stored procedure within transaction
+                            await db.ExecuteAsync("InsertDocumentWithSrNo", parameters, commandType: CommandType.StoredProcedure, transaction: transaction); 
+                            // Get output values
+                            var srNo = parameters.Get<long?>("@NewSrNo"); 
+                            var message = parameters.Get<string>("@ResponseMessage"); 
+                            var logMessage = $"MKEY: {documentUpload.MKEY}, SR_NO: {srNo}, Message: {message}"; 
+                            if (!srNo.HasValue) 
+                            { 
+                                // Rollback if insert failed
+                                transaction.Rollback(); 
+                                return logMessage;
+                                // Return logMessage even on failure
+                              } 
+                            // Commit transaction if everything is fine
+                            transaction.Commit(); 
+                            return logMessage; // Return logMessage on success
+                           } catch (Exception exTrans) 
+                        { 
+                            // Rollback on any exception
+                            transaction.Rollback(); 
+                            return $"Transaction failed and rolled back. Exception: {exTrans.Message}"; 
+                        }
+                    }
+                }
+            } catch (Exception ex) 
+            {
+                return $"Connection/Execution failed: {ex.Message}";
+            }
+        }
+
+        public async Task<InvoiceDocDto> GetInvoiceDocAsync(decimal mkey, decimal srNo)
+        {
+            const string query = @"SELECT MKEY,SR_NO,DOC_NAME,DOC_TYPE,FILE_NAME,FILECONTENTS,FILECONTENTVAR, ATTRIBUTE5
+                                 FROM INVOICE_DOC_TRL 
+                                 WHERE MKEY = @MKEY
+                                 AND SR_NO = @SR_NO";
+
+            using (IDbConnection db = _dbConnection.CreateConnection())
+            {
+                if (db.State != ConnectionState.Open)
+                    db.Open();
+
+                var result = await db.QueryFirstOrDefaultAsync<InvoiceDocDto>(
+                    query,
+                    new
+                    {
+                        MKEY = mkey,
+                        SR_NO = srNo
+                    });
+
+                return result;
+            }
+        }
+
+
+
+
+        //public static byte[] Base64ToVarbinarySafe(string base64)
+        //{
+        //    if (string.IsNullOrWhiteSpace(base64))
+        //        throw new ArgumentException("FILECONTENTVAR is empty");
+
+        //    // Remove data URI prefix if present
+        //    if (base64.Contains(","))
+        //        base64 = base64.Substring(base64.IndexOf(",") + 1);
+
+        //    // Remove whitespace
+        //    base64 = base64
+        //        .Replace("\r", "")
+        //        .Replace("\n", "")
+        //        .Replace(" ", "");
+
+        //    // Fix padding
+        //    base64 = base64.PadRight(
+        //        base64.Length + (4 - base64.Length % 4) % 4, '=');
+
+        //    // Validate Base64
+        //    if (!Convert.TryFromBase64String(base64, new Span<byte>(new byte[base64.Length]), out _))
+        //        throw new FormatException("FILECONTENTVAR is not valid Base64");
+
+        //    return Convert.FromBase64String(base64);
+        //}
+
+        //public static byte[] Base64ToVarbinarySafe(string base64)
+        //{
+        //    if (string.IsNullOrWhiteSpace(base64))
+        //        return Array.Empty<byte>();
+
+        //    // Remove data URI prefix
+        //    int commaIndex = base64.IndexOf(',');
+        //    if (commaIndex >= 0)
+        //        base64 = base64.Substring(commaIndex + 1);
+
+        //    base64 = base64.Trim();
+
+        //    try
+        //    {
+        //        return Convert.FromBase64String(base64);
+        //    }
+        //    catch (FormatException ex)
+        //    {
+        //        throw new FormatException("Invalid Base64 FILECONTENTVAR", ex);
+        //    }
+        //}
+
+        public static byte[] Base64ToVarbinarySafe(string base64)
+        {
+            if (string.IsNullOrWhiteSpace(base64))
+                return Array.Empty<byte>();
+
+            // Remove data URI prefix (data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,)
+            int commaIndex = base64.IndexOf(',');
+            if (commaIndex >= 0)
+                base64 = base64.Substring(commaIndex + 1);
+
+            // Remove whitespace & line breaks
+            base64 = base64
+                .Replace("\r", "")
+                .Replace("\n", "")
+                .Replace("\t", "")
+                .Replace(" ", "");
+
+            // Fix padding if missing
+            int padding = base64.Length % 4;
+            if (padding > 0)
+                base64 = base64.PadRight(base64.Length + (4 - padding), '=');
+
+            // Handle URL-safe Base64
+            base64 = base64
+                .Replace('-', '+')
+                .Replace('_', '/');
+
+            try
+            {
+                return Convert.FromBase64String(base64);
+            }
+            catch (FormatException ex)
+            {
+                throw new FormatException(
+                    $"Invalid Base64 content. Length={base64.Length}", ex);
+            }
+        }
+
     }
 }
