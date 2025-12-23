@@ -3,28 +3,38 @@ using FMS_WebAPI.Model;
 using FMS_WebAPI.Repository.IRepositoryService;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using System.Data;
 using System.Data.Common;
 using System.Data.SqlClient;
+using System.IO.Compression;
 using System.Net;
 using System.Reflection;
+using System.Security.Cryptography.Xml;
+using System.Text;
 
 namespace FMS_WebAPI.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
-    public class DashboardController : ControllerBase
+    public class DashboardController : Controller
     {
         private readonly IAuthService _authService;
         private readonly IConfiguration _configuration;
         private readonly IDapperDbConnection _dbConnection;
+        private readonly ICommonService _commonService;
+        private readonly FileSettings _fileSettings;
+        private readonly string keyString;
 
-        public DashboardController(IAuthService authService, SqlConnection sqlConnection, IConfiguration configuration, IDapperDbConnection connection)
+        public DashboardController(IAuthService authService, SqlConnection sqlConnection, IConfiguration configuration, IDapperDbConnection connection ,ICommonService commonService ,IOptions<FileSettings> filesetting)
         {
             _authService = authService;
             _configuration = configuration;
             _dbConnection = connection;
+            _commonService = commonService;
+            _fileSettings = filesetting.Value;
+            keyString = _configuration["EncryptionKey"];
 
         }
 
@@ -78,6 +88,7 @@ namespace FMS_WebAPI.Controllers
                 }
             }
 
+        // Fetching Details of Uploaded Files against Invoice Mkey  
         [HttpGet("GetUploadFileRec-By_Mkey_NT")]
         public async Task<IActionResult> GetUploadFileRec(string mkey ,int? Session_userId ,int?Business_GroupId)
         {
@@ -94,6 +105,7 @@ namespace FMS_WebAPI.Controllers
                 var documents = await connection.QueryAsync<InvoiceDocumentModel>("SP_GET_INVOICE_DOC_DEATAILS",parameters,commandType: CommandType.StoredProcedure);
                 if (documents.Any())
                 {
+                    //var encryptResponse = _commonService.EncryptionObje<List<InvoiceDocumentModel>>(documents, keyString);
                     responseObject.Status = "Success";
                     responseObject.Message = "INVOICE_DOC_DEATAILS Fetch Successfully";
                     responseObject.Data = documents;
@@ -116,6 +128,7 @@ namespace FMS_WebAPI.Controllers
             }
         }
 
+        // Fetching Uploaded File from Database based on Mkey and Sr No
         [HttpPost("ReadFileUploaded_NT")]
         public async Task<IActionResult> ReadFileUploaded([FromBody] ReadFileUpload_Model upload_Model)
         {
@@ -236,5 +249,268 @@ namespace FMS_WebAPI.Controllers
                 return StatusCode(500, responseObject);
             }
         }
+
+        [HttpPost("Upload-File_NT")]
+        public async Task<IActionResult> EncryptFiles([FromBody] CommonEncryptRsw commonEncrypt)   //CommonEncryptRsw commonEncrypt   //List<DocumentUploadModel> documentUpload
+        {
+            var responseObject = new ResponseObject<List<DocumentInsertResponse>>
+            {
+                Status = "Error",
+                Message = "Error saving encrypted files",
+                Data = new List<DocumentInsertResponse>()
+            };
+
+            if (string.IsNullOrEmpty(commonEncrypt.encryptjosn))
+            {
+                return BadRequest("Encrypted payload is missing");
+            }
+
+            //if (documentUpload == null || !documentUpload.Any())
+            //    return BadRequest("No files uploaded");
+
+           // string keyString = _configuration["EncryptionKey"];
+            List<DocumentInsertResponse> documentUploadsList = new List<DocumentInsertResponse>();
+            //var decryptedFiles = _commonService.DecryptFileDataWithNamesList("Upload_payload.txt",commonEncrypt.encryptjosn, keyString);
+            //var PassworsHash = _authService.DecryptPassword(commonEncrypt.encryptjosn, keyString);
+            //var documentUploadModels = System.Text.Json.JsonSerializer.Deserialize<List<DocumentUploadModel>>(PassworsHash);
+           // var DocumentuploadModel = System.Text.Json.JsonSerializer.Deserialize<List<DocumentUploadModel>>(PassworsHash);
+            //var changePaswordModel = _commonService.DecryptObject<DocumentUploadModel>(commonEncrypt.encryptjosn, keyString);
+            var documentUpload = _commonService.DecryptObject<List<DocumentUploadModel>>(commonEncrypt.encryptjosn, keyString);
+            //var documentUpload = _commonService.DecryptObjects<List<DocumentUploadModel>>(commonEncrypt.encryptjosn, keyString);
+            try
+            {
+                if(documentUpload.Count() > 0)
+                {
+                    foreach (var file in documentUpload)
+                    {
+                        // Encrypt object
+                        var encryptedFile = _commonService.EncryptionObje<DocumentUploadModel>(file, keyString);
+                        var userwareHouses = _commonService.DecryptObject<DocumentUploadModel>(encryptedFile, keyString);
+                        userwareHouses.FILECONTENTS = userwareHouses.FILECONTENTVAR;
+                        // Make The encrypt for FileContents
+                        var encryptedInvoiceModel = new Invoice_EncryptedModel
+                        {
+                            MKEY = userwareHouses.MKEY,
+                            FILE_NAME = userwareHouses.FILE_NAME,
+                            DOC_NAME = userwareHouses.DOC_NAME,
+                            DOC_TYPE = userwareHouses.DOC_TYPE,
+                            FILECONTENTVAR = userwareHouses.FILECONTENTVAR,
+                            FILECONTENTS = userwareHouses.FILECONTENTS,
+                            FileContentType = userwareHouses.ATTRIBUTE5,
+                        };
+
+                        var encrypted_Invoice_DOCTrl = _commonService.EncryptionObje<Invoice_EncryptedModel>(encryptedInvoiceModel, keyString);
+                        var Decrypt_Invoice_DOCTrl = _commonService.DecryptObject<Invoice_EncryptedModel>(encrypted_Invoice_DOCTrl, keyString);
+                        userwareHouses.FILECONTENTVAR = encrypted_Invoice_DOCTrl;
+                        // Insert into database
+                        var spResponse = await _commonService.InsertInvoice_DOC_TRl(userwareHouses);
+                        var insertResponse = new DocumentInsertResponse();
+                        try
+                        {
+                            // Example logMessage: "MKEY: 4, SR_NO: 2, Message: Insert successful. MKEY=4, SR_NO=2"
+                            var parts = spResponse.Split(',');
+                            if (parts.Length >= 3)
+                            {
+                                insertResponse.MKEY = long.Parse(parts[0].Replace("MKEY:", "").Trim());
+                                insertResponse.SR_NO = long.Parse(parts[1].Replace("SR_NO:", "").Trim());
+                                insertResponse.Message = parts[2].Trim().Replace("Message:", "").Trim();
+                                insertResponse.Status = insertResponse.Message.Contains("Success") ? "Success" : "Error";
+                            }
+                            else
+                            {
+                                insertResponse.Status = "Error";
+                                insertResponse.Message = spResponse;
+                            }
+                        }
+                        catch
+                        {
+                            insertResponse.Status = "Error";
+                            insertResponse.Message = spResponse;
+                        }
+                        documentUploadsList.Add(insertResponse);
+                    }
+                    // Final response
+                    responseObject.Data = documentUploadsList;
+                    responseObject.Status = documentUploadsList.All(x => x.Status == "Success") ? "Success" : "Error";
+                    responseObject.Message = responseObject.Status == "Success" ? "Files encrypted and saved successfully" : "Some files failed to save";
+                    return Ok(responseObject);
+                }
+                else
+                {
+/*                  responseObject.Data = documentUpload.FirstOrDefault()*/;
+                    responseObject.Status = "Success";
+                    responseObject.Message = "No Data Available ";
+                    return Ok(responseObject);
+                }
+                
+            }
+            catch (Exception ex)
+            {
+                responseObject.Status = "Error";
+                responseObject.Message = $"Error: {ex.Message}";
+                return Ok(responseObject);
+            }
+        }
+
+        
+
+        [HttpPost("Download")]
+        public async Task<IActionResult> DownloadFile([FromBody ] Downloadfile downloadfile)    //Downloadfile downloadfile  ,CommonEncryptRsw commonEncrypt
+        {
+            try
+            {
+                string keyString = _configuration["EncryptionKey"];
+                string _filePath = _configuration["FileSettings:FilePath"];
+
+                //if (string.IsNullOrEmpty(commonEncrypt.encryptjosn))
+                //{
+                //    return BadRequest("Encrypted payload is missing");
+                //}
+
+                var downloadfilepayload = _commonService.EncryptionObje<Downloadfile>(downloadfile, keyString);
+                var decryptdownloadfile = _commonService.DecryptObject<Downloadfile>(downloadfilepayload, keyString);
+                if (decryptdownloadfile == null)
+                    return BadRequest("Invalid download Files parameters");
+
+                //var doc = await _commonService.GetInvoiceDocAsync(downloadfile.mkey, downloadfile.srNo);
+                var doc = await _commonService.GetInvoiceDocAsync(decryptdownloadfile.mkey, decryptdownloadfile.srNo);
+                if (doc == null)
+                    return NotFound("File not found");
+                var Decrypt_Invoice_DOCTrl = _commonService.DecryptObject<Invoice_EncryptedModel>(doc.FILECONTENTVAR, keyString);
+                byte[] fileBytes = Convert.FromBase64String(Decrypt_Invoice_DOCTrl.FILECONTENTVAR);
+                string contentType = string.IsNullOrEmpty(doc.ATTRIBUTE5) ? "application/octet-stream" : doc.ATTRIBUTE5;
+                string folderPath = Path.Combine(_filePath);
+                if (!Directory.Exists(folderPath))
+                    Directory.CreateDirectory(folderPath);
+
+                // Full file path
+                string filePath = Path.Combine(folderPath, doc.FILE_NAME);
+                await System.IO.File.WriteAllBytesAsync(filePath, fileBytes);
+
+                // Save path in DB
+                //SavePathToDB(dto.FileName, filePath);
+                Response.Headers.Add("Content-Disposition", $"attachment; filename=\"{doc.FILE_NAME}\"");
+                return File(fileBytes, "application/octet-stream", doc.FILE_NAME);
+
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }                                                                                                                                                                                                                                                   
+            
+        }
+
+        #region
+        ////Previouse Old Code 
+
+        //[HttpPost("EncryptFiles")]
+        //public async Task<IActionResult> EncryptFiles([FromForm] List<IFormFile> files)
+        //{
+        //    var Documentfile = new DocumentUploadModel();
+        //    List<DocumentUploadModel> documentUploadsList = new List<DocumentUploadModel>();
+        //    try
+        //    {
+        //        if (files == null || files.Count == 0)
+        //            return BadRequest("No files uploaded");
+
+        //        string keyString = _configuration["EncryptionKey"];
+
+        //        // 1️⃣ Encrypt all uploaded files with filenames
+        //        var encryptedFiles = await _commonService.EncryptFileDataWithNamesAsync(files, keyString);
+
+        //        // Optional: Save encrypted files to folder
+        //        string folderPath = Path.Combine("D:\\Uploads\\EncryptedFiles");
+        //        if (!Directory.Exists(folderPath))
+        //            Directory.CreateDirectory(folderPath);
+
+        //        foreach (var encryptedBase64 in encryptedFiles)
+        //        {
+        //            byte[] encryptedBytes = Convert.FromBase64String(encryptedBase64);
+        //            string savePath = Path.Combine(folderPath, Guid.NewGuid() + ".enc"); // Use GUID to avoid overwrites
+        //            await System.IO.File.WriteAllBytesAsync(savePath, encryptedBytes);
+        //        }
+
+        //        // Optional: Decrypt files to verify (can be removed in production)
+        //        var decryptedFiles = _commonService.DecryptFileDataWithNamesList(encryptedFiles, keyString);
+
+        //        foreach (var file in decryptedFiles)
+        //        {
+        //            Documentfile.FILE_NAME = file.FileName;
+        //            Documentfile.FILECONTENTS = file.FileBytes;
+        //            Documentfile.DOC_NAME = Path.GetFileNameWithoutExtension(file.FileName);
+        //            Documentfile.DOC_TYPE = Path.GetFileNameWithoutExtension(file.FileName);
+        //            documentUploadsList.Add(Documentfile);
+        //        }
+
+
+
+        //        // This Part Used For Download The File
+        //        //using var zipStream = new MemoryStream();
+        //        //using (var archive = new ZipArchive(zipStream,ZipArchiveMode.Create ,true)) 
+        //        //{
+
+        //        //    foreach (var file in decryptedFiles)
+        //        //    {
+        //        //        var zipEntry = archive.CreateEntry(file.FileName);
+        //        //        using var entryStream = zipEntry.Open();
+        //        //        await entryStream.WriteAsync(file.FileBytes, 0, file.FileBytes.Length);
+        //        //    }
+        //        //}
+
+        //        //zipStream.Position = 0;
+
+        //        //return File(
+        //        //    zipStream.ToArray(),
+        //        //    "application/zip",
+        //        //    "DecryptedFiles.zip"
+        //        //);
+
+
+        //        // Encrypt Part For Files
+        //        foreach (var file in decryptedFiles)
+        //        {
+        //            string decryptedPath = Path.Combine(folderPath, "Decrypted_" + file.FileName);
+        //            await System.IO.File.WriteAllBytesAsync(decryptedPath, file.FileBytes);
+        //        }
+        //        // 2️⃣ Return encrypted files as Base64 strings in JSON
+        //        return Ok(new
+        //        {
+        //            Message = "Files encrypted successfully",
+        //            EncryptedFiles = encryptedFiles,
+        //            DecryptedFileNames = decryptedFiles.Select(f => f.FileName).ToList() // Optional for verification
+        //        });
+
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        throw;
+        //    }
+
+        //}
+
+
+        //[HttpGet("DownloadEncryptedFile")]
+        //public IActionResult DownloadEncryptedFile(string storedFileName, string originalFileName)
+        //{
+
+        //    string basePath = _configuration["FileSettings:FilePath"];
+        //    string filePath = Path.Combine(basePath, storedFileName);
+
+        //    if (!System.IO.File.Exists(filePath))
+        //        return NotFound("File not found");
+
+        //    byte[] encryptedBytes = System.IO.File.ReadAllBytes(filePath);
+        //    string key = _configuration["EncryptionKey"];
+
+        //    byte[] fileBytes = _commonService.DecryptSecure(encryptedBytes, key);
+
+        //    return File(
+        //        fileBytes,
+        //        "application/octet-stream",
+        //        originalFileName
+        //    );
+        //}
+        #endregion
+
     }
 }

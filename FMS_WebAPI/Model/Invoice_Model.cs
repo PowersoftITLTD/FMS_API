@@ -106,4 +106,36 @@ namespace FMS_WebAPI.Model
     {
         public string? encryptjosn { get; set; }
     }
+
+    public class InvoiceDocDto
+    {
+        public decimal MKEY { get; set; }
+        public decimal SR_NO { get; set; }
+        public string DOC_NAME { get; set; }
+        public string DOC_TYPE { get; set; }
+        public string FILE_NAME { get; set; }
+
+        public byte[] FILECONTENTS { get; set; }     // VARBINARY
+        public string FILECONTENTVAR { get; set; }   // Base64 (optional)
+        public string ATTRIBUTE5 { get; set; }
+    }
+
+    public class Downloadfile
+    {
+        public decimal mkey { get; set;}
+        public decimal srNo { get; set;}
+    }
+
+    public class Invoice_EncryptedModel
+    {
+        public decimal MKEY { get; set; }
+       // public decimal SR_NO { get; set; }
+        public string DOC_NAME { get; set; }
+        public string DOC_TYPE { get; set; }
+        public string FILE_NAME { get; set; }
+
+        public string FILECONTENTS { get; set; }     // VARBINARY
+        public string FILECONTENTVAR { get; set; }   // Base64 (optional)
+        public string FileContentType { get; set;}
+    }
 }

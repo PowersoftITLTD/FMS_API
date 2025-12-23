@@ -16,6 +16,8 @@ namespace FMS_WebAPI.Model
     {
         public string userid { get; set; }
         public string warehouseid { get; set; }
+        public int? Session_UserId { get; set; }
+        public int? Business_Groupid { get; set; }
     }
 
     public class DeviceRegistration

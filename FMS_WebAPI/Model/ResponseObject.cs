@@ -42,4 +42,10 @@ namespace FMS_WebAPI.Model
         public string Error { get; set; }
     }
 
+    public class ResponseVerifying_Validate
+    {
+        public string Status { get; set; }
+        public string Message { get; set; }
+        public bool flag_Status { get; set;}
+    }
 }

@@ -20,6 +20,7 @@ namespace FMS_WebAPI.Repository.IRepositoryService
         Task<ResponseObject<List<User_MST_Model>>> GetuserDetails_ByEmailId(string email);
         Task<IEnumerable<ForgotPasswordOutPut_List>> GetForgotPasswordAsync(string LoginName);
         Task<IEnumerable<ResetPasswordOutPut_List>> GetResetPasswordAsync(string TEMPPASSWORD, string LoginName);
+        Task<ResponseVerifying_Validate> GetCheckUserName_PasswordVerifying(UserModel userModel);
 
         //Task<string> InsertILogResponse(LogResponseObject logResponseObject);
 
