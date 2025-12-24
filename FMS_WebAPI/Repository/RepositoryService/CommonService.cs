@@ -352,8 +352,73 @@ namespace FMS_WebAPI.Repository.RepositoryService
             }
         }
 
-
-
+        public async Task<string> UpdateInvoice_DOC_TRl(DocumentUploadModel documentUpload)
+        {
+            try
+            {
+                using (IDbConnection db = _dbConnection.CreateConnection())
+                {
+                    db.Open(); // Ensure connection is open
+                    using (var transaction = db.BeginTransaction())
+                    {
+                        try
+                        {
+                            //byte[] fileBytes = Base64ToVarbinarySafe(documentUpload.FILECONTENTS); 
+                            byte[] fileBytes = Base64ToVarbinarySafe(documentUpload.FILECONTENTS);
+                            var parameters = new DynamicParameters();
+                            parameters.Add("@MKEY", documentUpload.MKEY);
+                            parameters.Add("@SrNo", documentUpload.SR_NO);
+                            parameters.Add("@DOC_NAME", string.IsNullOrEmpty(documentUpload.DOC_NAME) ? null : documentUpload.DOC_NAME);
+                            parameters.Add("@DOC_TYPE", string.IsNullOrEmpty(documentUpload.DOC_TYPE) ? null : documentUpload.DOC_TYPE);
+                            parameters.Add("@FILE_NAME", string.IsNullOrEmpty(documentUpload.FILE_NAME) ? null : documentUpload.FILE_NAME);
+                            parameters.Add("@FILECONTENTS", (fileBytes == null || fileBytes.Length == 0) ? (object)DBNull.Value : fileBytes, DbType.Binary);
+                            //parameters.Add("@FILECONTENTS", fileBytes,DbType.Binary); // or DBNull.Value
+                            parameters.Add("@FILECONTENTVAR", string.IsNullOrEmpty(documentUpload.FILECONTENTVAR) ? null : documentUpload.FILECONTENTVAR, DbType.String, size: -1);
+                            parameters.Add("@UPLOADED_BY", documentUpload.UPLOADED_BY > 0 ? documentUpload.UPLOADED_BY : (object)DBNull.Value, DbType.Int64);
+                            parameters.Add("@IS_MANDATORY", string.IsNullOrEmpty(documentUpload.IS_MANDATORY) ? "Y" : documentUpload.IS_MANDATORY);
+                            parameters.Add("@STATUS_FLAG", string.IsNullOrEmpty(documentUpload.STATUS_FLAG) ? "P" : documentUpload.STATUS_FLAG);
+                            parameters.Add("@APPROVER_ID", documentUpload.APPROVER_ID > 0 ? documentUpload.APPROVER_ID : (object)DBNull.Value, DbType.Int64);
+                            parameters.Add("@ATTRIBUTE1", string.IsNullOrEmpty(documentUpload.ATTRIBUTE1) ? null : documentUpload.ATTRIBUTE1);
+                            parameters.Add("@ATTRIBUTE2", string.IsNullOrEmpty(documentUpload.ATTRIBUTE2) ? null : documentUpload.ATTRIBUTE2);
+                            parameters.Add("@ATTRIBUTE3", string.IsNullOrEmpty(documentUpload.ATTRIBUTE3) ? null : documentUpload.ATTRIBUTE3);
+                            parameters.Add("@ATTRIBUTE4", string.IsNullOrEmpty(documentUpload.ATTRIBUTE4) ? null : documentUpload.ATTRIBUTE4);
+                            parameters.Add("@ATTRIBUTE5", string.IsNullOrEmpty(documentUpload.ATTRIBUTE5) ? null : documentUpload.ATTRIBUTE5);
+                            parameters.Add("@CREATED_BY", documentUpload.CREATED_BY);
+                            parameters.Add("@LAST_UPDATED_BY", documentUpload.LAST_UPDATED_BY > 0 ? documentUpload.LAST_UPDATED_BY : (object)DBNull.Value, DbType.Int64);
+                            parameters.Add("@LAST_UPDATE_DATE", documentUpload.LAST_UPDATE_DATE.HasValue ? documentUpload.LAST_UPDATE_DATE.Value : (object)DBNull.Value, DbType.DateTime); // Output parameters
+                            parameters.Add("@NewSrNo", dbType: DbType.Int64, direction: ParameterDirection.Output);
+                            parameters.Add("@ResponseMessage", dbType: DbType.String, size: 200, direction: ParameterDirection.Output);
+                            // Execute stored procedure within transaction
+                            await db.ExecuteAsync("InsertDocumentWithSrNo", parameters, commandType: CommandType.StoredProcedure, transaction: transaction);
+                            // Get output values
+                            var srNo = parameters.Get<long?>("@NewSrNo");
+                            var message = parameters.Get<string>("@ResponseMessage");
+                            var logMessage = $"MKEY: {documentUpload.MKEY}, SR_NO: {srNo}, Message: {message}";
+                            if (!srNo.HasValue)
+                            {
+                                // Rollback if insert failed
+                                transaction.Rollback();
+                                return logMessage;
+                                // Return logMessage even on failure
+                            }
+                            // Commit transaction if everything is fine
+                            transaction.Commit();
+                            return logMessage; // Return logMessage on success
+                        }
+                        catch (Exception exTrans)
+                        {
+                            // Rollback on any exception
+                            transaction.Rollback();
+                            return $"Transaction failed and rolled back. Exception: {exTrans.Message}";
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return $"Connection/Execution failed: {ex.Message}";
+            }
+        }
 
         //public static byte[] Base64ToVarbinarySafe(string base64)
         //{

@@ -303,7 +303,16 @@ namespace FMS_WebAPI.Controllers
                         var Decrypt_Invoice_DOCTrl = _commonService.DecryptObject<Invoice_EncryptedModel>(encrypted_Invoice_DOCTrl, keyString);
                         userwareHouses.FILECONTENTVAR = encrypted_Invoice_DOCTrl;
                         // Insert into database
-                        var spResponse = await _commonService.InsertInvoice_DOC_TRl(userwareHouses);
+                        string spResponse = string.Empty;
+                        if (userwareHouses.SR_NO == 0)
+                        {
+                             spResponse = await _commonService.InsertInvoice_DOC_TRl(userwareHouses);
+                        }
+                        else
+                        {
+                            userwareHouses.LAST_UPDATED_BY= userwareHouses.UPLOADED_BY;
+                             spResponse = await _commonService.UpdateInvoice_DOC_TRl(userwareHouses);
+                        }
                         var insertResponse = new DocumentInsertResponse();
                         try
                         {
@@ -351,8 +360,6 @@ namespace FMS_WebAPI.Controllers
                 return Ok(responseObject);
             }
         }
-
-        
 
         [HttpPost("Download")]
         public async Task<IActionResult> DownloadFile([FromBody ] CommonEncryptRsw commonEncrypt)    //Downloadfile downloadfile  ,CommonEncryptRsw commonEncrypt

@@ -2,6 +2,7 @@
 using FMS_WebAPI.Model;
 using FMS_WebAPI.Repository.IRepositoryService;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
@@ -479,23 +480,53 @@ namespace FMS_WebAPI.Repository.RepositoryService
                     connection.Open();
                     var parameters = new DynamicParameters();
                     parameters.Add("@Email", email);
-                    //parameters.Add("@warehouseid", warehouseModel.warehouseid);
-                    var warehouseDetails = await connection.QueryAsync<User_MST_Model>("Sp_GetUserDetailsByEmail", parameters, commandType: CommandType.StoredProcedure); // Adjust the query as needed
 
-                    if (warehouseDetails.Any())
+                    parameters.Add("@IsSuccess", dbType: DbType.Boolean, direction: ParameterDirection.Output);
+                    parameters.Add("@ResponseMessage", dbType: DbType.String, size: 200, direction: ParameterDirection.Output);
+
+                    // Execute SP
+                    //"Sp_GetUserDetailsByEmail"
+                    var userList = (await connection.QueryAsync<User_MST_Model>(
+                        "Sp_GetUserDetailsByEmail",
+                        parameters,
+                        commandType: CommandType.StoredProcedure
+                    )).ToList();
+
+                    // Read OUTPUT values
+                    bool isSuccess = parameters.Get<bool>("@IsSuccess");
+                    string responseMessage = parameters.Get<string>("@ResponseMessage");
+                    if(isSuccess && userList.Any())
                     {
                         responseObject.Status = "Success";
-                        responseObject.Message = "WareHouse Details Fetch Successfully";
-                        responseObject.Data = warehouseDetails.ToList();
-                        return (responseObject);
+                        responseObject.Message = responseMessage;
+                        responseObject.Data = userList;
                     }
                     else
                     {
-                        responseObject.Status = "Success";
-                        responseObject.Message = "No Data Available";
-                        responseObject.Data = warehouseDetails.ToList();
-                        return (responseObject);
+                        responseObject.Status = "Error";
+                        responseObject.Message = responseMessage;
+                        responseObject.Data = null;
                     }
+                    return (responseObject);
+
+                    //parameters.Add("@warehouseid", warehouseModel.warehouseid);
+                    // var warehouseDetails = await connection.QueryAsync<User_MST_Model>("Sp_GetUserDetailsByEmail", parameters, commandType: CommandType.StoredProcedure); // Adjust the query as needed
+                    //var statusresponse= warehouseDetails.Select(x=>x.);
+                    //if (userList.Any())
+                    //{
+                    //    responseObject.Status = "Success";
+                    //    responseObject.Message = "WareHouse Details Fetch Successfully";
+                    //    responseObject.Data = userList.ToList();
+                    //    return (responseObject);
+                    //}
+                    //else
+                    //{
+                    //    responseObject.Status = "Success";
+                    //    responseObject.Message = "No Data Available";
+                    //    responseObject.Data = userList.ToList();
+                    //    return (responseObject);
+                    //}
+
                 }
 
             }

@@ -12,6 +12,7 @@ namespace FMS_WebAPI.Repository.IRepositoryService
         string SendEmail(string sp_to, string sp_cc, string sp_bcc, string sp_subject, string sp_body, string sp_mailtype, string sp_display_name, List<string> lp_attachment, MailDetailsNT mailDetailsNT);
         
         Task<string> InsertInvoice_DOC_TRl(DocumentUploadModel documentUpload);
+        Task<string> UpdateInvoice_DOC_TRl(DocumentUploadModel documentUpload);
         Task<InvoiceDocDto> GetInvoiceDocAsync(decimal mkey, decimal srNo);
         //byte[] EncryptBytes(byte[] data, string keyString);
 
