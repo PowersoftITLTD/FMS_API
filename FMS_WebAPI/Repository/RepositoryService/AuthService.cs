@@ -39,7 +39,7 @@ namespace FMS_WebAPI.Repository.RepositoryService
             using (var connection = _dbConnection.CreateConnection())
             {
                 connection.Open();
-                using (var multi = connection.QueryMultiple("Sp_Validate_Login",new{LoginName = _user.username,Password = _user.password,WarehouseID = _user.warehouseid},commandType: CommandType.StoredProcedure))
+                using (var multi = connection.QueryMultiple("Sp_Validate_Login",new{LoginName = _user.username.ToLower(),Password = _user.password,WarehouseID = _user.warehouseid},commandType: CommandType.StoredProcedure))
                 {
                     //First result: UserDetails
                    var userDetails = multi.Read<UserDetailsModel>().FirstOrDefault();
@@ -69,7 +69,7 @@ namespace FMS_WebAPI.Repository.RepositoryService
             using (var connection = _dbConnection.CreateConnection())
             {
                 connection.Open();
-                using (var multi = connection.QueryMultiple("Sp_Validate_Login_WHCode", new { LoginName = _userWarehouse.username, Password = _userWarehouse.password, WarehouseID = _userWarehouse.warehousecode }, commandType: CommandType.StoredProcedure))
+                using (var multi = connection.QueryMultiple("Sp_Validate_Login_WHCode", new { LoginName = _userWarehouse.username.ToLower(), Password = _userWarehouse.password, WarehouseID = _userWarehouse.warehousecode }, commandType: CommandType.StoredProcedure))
                 {
                     //First result: UserDetails
                     var userDetails = multi.Read<UserDetailsModel>().FirstOrDefault();
@@ -681,7 +681,7 @@ namespace FMS_WebAPI.Repository.RepositoryService
                     db.Open();
 
                 var parameters = new DynamicParameters();
-                parameters.Add("@LoginName", userModel.Username, DbType.String, ParameterDirection.Input);
+                parameters.Add("@LoginName", userModel.Username.ToLower(), DbType.String, ParameterDirection.Input);
                 parameters.Add("@Password", userModel.Password, DbType.String, ParameterDirection.Input);
 
                 parameters.Add("@responseMessage", dbType: DbType.String,

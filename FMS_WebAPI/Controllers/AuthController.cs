@@ -70,6 +70,10 @@ namespace FMS_WebAPI.Controllers
                 {
                     var response = await _authService.ValidateLogin(userModel);
                     var UserEncrypted = _authService.UserEncryptedReponsone(userModel, keyString);
+                    var UserDetailsEncrypted = _commonService.EncryptionObje<UserDetailsModel>(response.User, keyString);
+                    var UserwareHouseDetailsEncrypted = _commonService.EncryptionObje<List<WarehouseModel>>(response.Warehouses, keyString);
+                    var UserDetailsDeEncrypted = _commonService.DecryptObject<UserDetailsModel>(UserDetailsEncrypted, keyString);
+                    var UserWareHouseDetailsDeEncrypted = _commonService.DecryptObject<List<WarehouseModel>>(UserwareHouseDetailsEncrypted, keyString);
                     if (response.User.USER_NAME == null || response.Token == "Invalid login name or password")
                     {
                         responseObject.Status = "Error";
@@ -87,7 +91,7 @@ namespace FMS_WebAPI.Controllers
                     //return Ok(responseObject);
                     responseObject.Status = "Ok";
                     responseObject.Message = "Token generated successfully.";
-                    responseObject.Data = new { ToKen = response.Token, user = response.User, warehouses = response.Warehouses, UserEncryptedDetails = UserEncrypted };
+                    responseObject.Data = new { ToKen = response.Token, user = UserDetailsEncrypted, warehouses = UserwareHouseDetailsEncrypted, UserEncryptedDetails = UserEncrypted };
                     return Ok(responseObject);
 
                 }
@@ -133,7 +137,7 @@ namespace FMS_WebAPI.Controllers
                 }
                 else
                 {
-                    var result = await _authService.VerifyingResponse(userModel.Username, userModel.Password);
+                    var result = await _authService.VerifyingResponse(userModel.Username.ToLower(), userModel.Password);
                     var userNameCom = userModel.Username + ":" + userModel.Password;
                     var userDetails = _commonService.EncryptionObje(result.User, keyString);
                     var WareHouseDetails = _commonService.EncryptionObje(result.Warehouses, keyString);
@@ -702,7 +706,7 @@ namespace FMS_WebAPI.Controllers
                         };
                     }
                 }
-                var result = await _authService.VerifyingResponse(userModel.Username, userModel.Password);
+                var result = await _authService.VerifyingResponse(userModel.Username.ToLower(), userModel.Password);
                 if (!string.IsNullOrEmpty(result.User.EMAIL))
                 {
                     responseObject.Status = "Ok";

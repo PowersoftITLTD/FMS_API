@@ -355,20 +355,21 @@ namespace FMS_WebAPI.Controllers
         
 
         [HttpPost("Download")]
-        public async Task<IActionResult> DownloadFile([FromBody ] Downloadfile downloadfile)    //Downloadfile downloadfile  ,CommonEncryptRsw commonEncrypt
+        public async Task<IActionResult> DownloadFile([FromBody ] CommonEncryptRsw commonEncrypt)    //Downloadfile downloadfile  ,CommonEncryptRsw commonEncrypt
         {
+            var responseObject = new ResponseObject<object>();
             try
             {
                 string keyString = _configuration["EncryptionKey"];
                 string _filePath = _configuration["FileSettings:FilePath"];
 
-                //if (string.IsNullOrEmpty(commonEncrypt.encryptjosn))
-                //{
-                //    return BadRequest("Encrypted payload is missing");
-                //}
+                if (string.IsNullOrEmpty(commonEncrypt.encryptjosn))
+                {
+                    return BadRequest("Encrypted payload is missing");
+                }
 
-                var downloadfilepayload = _commonService.EncryptionObje<Downloadfile>(downloadfile, keyString);
-                var decryptdownloadfile = _commonService.DecryptObject<Downloadfile>(downloadfilepayload, keyString);
+                //var downloadfilepayload = _commonService.EncryptionObje<Downloadfile>(downloadfile, keyString);
+                var decryptdownloadfile = _commonService.DecryptObject<Downloadfile>(commonEncrypt.encryptjosn, keyString);
                 if (decryptdownloadfile == null)
                     return BadRequest("Invalid download Files parameters");
 
@@ -395,7 +396,10 @@ namespace FMS_WebAPI.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"Internal server error: {ex.Message}");
+                responseObject.Status = "Error";
+                responseObject.Message = $"Error: {ex.Message}";
+                return Ok(responseObject);
+                //return StatusCode(500, $"Internal server error: {ex.Message}");
             }                                                                                                                                                                                                                                                   
             
         }
