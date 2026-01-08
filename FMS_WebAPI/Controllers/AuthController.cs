@@ -59,7 +59,7 @@ namespace FMS_WebAPI.Controllers
                     Password = userModel.password
                 };
                 var validate_obj = await _authService.GetCheckUserName_PasswordVerifying(userModels);
-                if (validate_obj.Status == "Failed" && validate_obj.flag_Status== false)
+                if (validate_obj.Status == "FAILED" && validate_obj.flag_Status== false)
                 {
                     responseObject.Status = "Error";
                     responseObject.Message = validate_obj.Message;

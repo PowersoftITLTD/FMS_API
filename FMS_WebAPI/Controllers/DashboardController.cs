@@ -67,9 +67,12 @@ namespace FMS_WebAPI.Controllers
                     var invoices = await connection.QueryAsync<Invoice_Model>("SP_GET_INVOICE_DEATAILS",parameters,commandType: CommandType.StoredProcedure);
                     if (invoices.Any())
                     {
-                        responseObject.Status = "Success";
-                        responseObject.Message = "Invoice Details Fetch Successfully";
-                        responseObject.Data = invoices;
+                    var invoiceDetailsList = invoices.ToList();
+                    var UserinvoiceDetailsEncrypted = _commonService.EncryptionObje<List<Invoice_Model>>(invoices.ToList(), keyString);
+                    var UserDetailsDeEncrypted = _commonService.DecryptObject<List<Invoice_Model>>(UserinvoiceDetailsEncrypted, keyString);
+                    responseObject.Status = "Success";
+                    responseObject.Message = "Invoice Details Fetch Successfully";
+                    responseObject.Data = UserinvoiceDetailsEncrypted;   ////invoices;
                     }
                     else
                     {
